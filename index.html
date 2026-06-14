@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>幸运大转盘</title>
+<style>
+  :root{
+    --bg1:#6a11cb; --bg2:#2575fc;
+    --gold:#ffd76a; --gold2:#f7a52b;
+    --card:#ffffff; --ink:#2b2b3a;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--ink);
+    background:linear-gradient(160deg,var(--bg1),var(--bg2));
+    min-height:100%;
+    display:flex;flex-direction:column;align-items:center;
+    padding:20px 16px 40px;
+    user-select:none;
+  }
+  .title{
+    color:#fff;font-size:26px;font-weight:800;letter-spacing:2px;margin:6px 0 2px;
+    text-shadow:0 2px 8px rgba(0,0,0,.25);
+  }
+  .subtitle{color:rgba(255,255,255,.85);font-size:13px;margin-bottom:14px;}
+
+  /* 转盘 */
+  .wheel-wrap{
+    position:relative;width:min(86vw,360px);aspect-ratio:1/1;margin:6px auto 4px;
+  }
+  .wheel-ring{
+    position:absolute;inset:-10px;border-radius:50%;
+    background:radial-gradient(circle at 50% 50%,#fff6d8,var(--gold) 60%,var(--gold2));
+    box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 0 0 6px rgba(255,255,255,.4);
+  }
+  /* 一圈彩灯 */
+  .lights{position:absolute;inset:-10px;border-radius:50%;pointer-events:none;}
+  .lights i{
+    position:absolute;width:8px;height:8px;border-radius:50%;background:#fff;
+    left:50%;top:50%;margin:-4px 0 0 -4px;
+    box-shadow:0 0 6px 2px rgba(255,255,255,.9);
+    animation:blink 1s infinite;
+  }
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:50%;}
+
+  /* 指针 */
+  .pointer{
+    position:absolute;left:50%;top:-6px;transform:translateX(-50%);
+    width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;
+    border-top:26px solid #ff3b30;z-index:5;
+    filter:drop-shadow(0 3px 3px rgba(0,0,0,.35));
+  }
+  /* 中心 GO 按钮 */
+  .hub{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:24%;aspect-ratio:1/1;border-radius:50%;z-index:4;
+    background:radial-gradient(circle at 50% 35%,#ff7a7a,#ff3b30);
+    color:#fff;font-weight:800;font-size:clamp(15px,4.6vw,20px);letter-spacing:1px;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    border:4px solid #fff;box-shadow:0 6px 14px rgba(0,0,0,.35);
+    transition:transform .08s;
+  }
+  .hub:active{transform:translate(-50%,-50%) scale(.94);}
+  .hub.disabled{filter:grayscale(.5) brightness(.9);cursor:not-allowed;}
+
+  /* 信息 & 操作 */
+  .meta{color:#fff;font-size:14px;margin:14px 0 4px;text-align:center;}
+  .meta b{color:var(--gold);font-size:18px;}
+  .actions{display:flex;gap:10px;margin-top:10px;}
+  .btn{
+    appearance:none;border:none;border-radius:999px;padding:10px 18px;font-size:14px;font-weight:600;
+    background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);cursor:pointer;
+  }
+  .btn:active{transform:scale(.96);}
+  .btn.primary{background:#fff;color:var(--bg1);border-color:#fff;}
+
+  /* 中奖记录 */
+  .history{width:min(86vw,360px);margin:18px auto 0;}
+  .history h3{color:#fff;font-size:14px;margin:0 0 8px;opacity:.9;}
+  .history ul{list-style:none;margin:0;padding:0;max-height:140px;overflow:auto;
+    background:rgba(255,255,255,.12);border-radius:12px;}
+  .history li{display:flex;justify-content:space-between;padding:9px 14px;color:#fff;font-size:13px;
+    border-bottom:1px solid rgba(255,255,255,.12);}
+  .history li:last-child{border-bottom:none;}
+  .history .empty{padding:14px;color:rgba(255,255,255,.7);font-size:13px;text-align:center;}
+
+  /* 弹窗 */
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:24px;}
+  .mask.show{display:flex;}
+  .dialog{background:var(--card);border-radius:18px;width:100%;max-width:320px;padding:24px 20px;text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.4);animation:pop .25s ease;}
+  @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+  .dialog .emoji{font-size:46px;}
+  .dialog h2{margin:8px 0 4px;font-size:20px;}
+  .dialog .prize{font-size:22px;font-weight:800;color:var(--gold2);margin:6px 0 2px;}
+  .dialog p{color:#666;font-size:13px;margin:6px 0 16px;}
+  .dialog .btn{background:linear-gradient(90deg,var(--bg1),var(--bg2));color:#fff;border:none;width:100%;padding:12px;}
+  #qrbox{display:flex;justify-content:center;margin:8px 0;}
+  #qrbox img,#qrbox canvas{border-radius:8px;}
+  .qr-url{word-break:break-all;font-size:12px;color:#888;margin:4px 0 14px;}
+</style>
+</head>
+<body>
+  <div class="title">🎉 幸运大转盘</div>
+  <div class="subtitle">扫码即玩 · 人人有奖</div>
+
+  <div class="wheel-wrap">
+    <div class="wheel-ring"></div>
+    <div class="lights" id="lights"></div>
+    <canvas id="wheel"></canvas>
+    <div class="pointer"></div>
+    <div class="hub" id="go">抽奖</div>
+  </div>
+
+  <div class="meta">今日剩余抽奖次数：<b id="left">-</b></div>
+  <div class="actions">
+    <button class="btn primary" id="shareBtn">📱 扫码分享</button>
+    <button class="btn" id="resetBtn">重置（测试）</button>
+  </div>
+
+  <div class="history">
+    <h3>🏆 我的中奖记录</h3>
+    <ul id="historyList"><li class="empty">还没有记录，快来抽一次吧～</li></ul>
+  </div>
+
+  <!-- 中奖弹窗 -->
+  <div class="mask" id="resultMask">
+    <div class="dialog">
+      <div class="emoji" id="resultEmoji">🎁</div>
+      <h2 id="resultTitle">恭喜中奖！</h2>
+      <div class="prize" id="resultPrize">-</div>
+      <p id="resultTip">截图保留，凭此页面到前台领取奖品</p>
+      <button class="btn" onclick="document.getElementById('resultMask').classList.remove('show')">开心收下</button>
+    </div>
+  </div>
+
+  <!-- 二维码弹窗 -->
+  <div class="mask" id="qrMask">
+    <div class="dialog">
+      <div class="emoji">📲</div>
+      <h2>扫码进入活动</h2>
+      <div id="qrbox"></div>
+      <div class="qr-url" id="qrUrl"></div>
+      <button class="btn" onclick="document.getElementById('qrMask').classList.remove('show')">关闭</button>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@gh-pages/qrcode.min.js"></script>
+<script>
+/* ====================== 可配置区域 ====================== */
+// 奖品列表：weight 是中奖权重（越大越容易中），不是百分比，会自动归一化。
+// 想改奖品 / 概率，只改这里即可。建议 6~10 个，太多文字会拥挤。
+const PRIZES = [
+  { name: '一等奖 🎧', weight: 1,  color: '#ff6b6b' },
+  { name: '谢谢参与', weight: 30, color: '#ffd9a0' },
+  { name: '5元红包', weight: 8,  color: '#ff9f68' },
+  { name: '再来一次', weight: 15, color: '#a0e7e5' },
+  { name: '二等奖 ☕', weight: 4,  color: '#b794f6' },
+  { name: '1元红包', weight: 20, color: '#ffe66d' },
+  { name: '精美礼品', weight: 6,  color: '#6ec1ff' },
+  { name: '谢谢参与', weight: 30, color: '#ffd9a0' },
+];
+
+const MAX_DRAWS_PER_DAY = 3;   // 每人每天最多抽几次（用 localStorage 限制，纯前端）
+const SPIN_SECONDS      = 3.2;  // 转动时长
+const SPIN_ROUNDS       = 6;    // 至少转几圈
+/* ======================================================= */
+
+const N   = PRIZES.length;
+const SEG = (Math.PI * 2) / N;
+const TWO_PI = Math.PI * 2;
+
+/* ---------- 画转盘 ---------- */
+const canvas = document.getElementById('wheel');
+const ctx = canvas.getContext('2d');
+let size = 0, cx = 0, cy = 0, R = 0, dpr = Math.max(1, window.devicePixelRatio || 1);
+
+function setupCanvas(){
+  const css = canvas.getBoundingClientRect();
+  size = css.width;
+  canvas.width  = Math.round(size * dpr);
+  canvas.height = Math.round(size * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx = size / 2; cy = size / 2; R = size / 2 - 4;
+  drawWheel(currentRot);
+}
+
+function drawWheel(rot){
+  ctx.clearRect(0, 0, size, size);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rot);
+  for (let i = 0; i < N; i++){
+    const start = i * SEG, end = start + SEG;
+    // 扇形
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, R, start, end);
+    ctx.closePath();
+    ctx.fillStyle = PRIZES[i].color;
+    ctx.fill();
+    // 分隔线
+    ctx.strokeStyle = 'rgba(255,255,255,.55)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // 文字（沿半径方向）
+    ctx.save();
+    ctx.rotate(start + SEG / 2);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#5a3b00';
+    const fs = Math.max(11, Math.min(15, size / 22));
+    ctx.font = `700 ${fs}px sans-serif`;
+    let label = PRIZES[i].name;
+    if (label.length > 6) label = label.slice(0, 6);
+    ctx.fillText(label, R - 14, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* ---------- 一圈彩灯 ---------- */
+(function buildLights(){
+  const box = document.getElementById('lights');
+  const num = 16;
+  for (let i = 0; i < num; i++){
+    const a = (i / num) * TWO_PI;
+    const el = document.createElement('i');
+    const r = 50; // 百分比半径
+    el.style.left = `calc(50% + ${Math.cos(a) * r}% )`;
+    el.style.top  = `calc(50% + ${Math.sin(a) * r}% )`;
+    el.style.animationDelay = (i % 2 ? .5 : 0) + 's';
+    box.appendChild(el);
+  }
+})();
+
+/* ---------- 抽奖逻辑 ---------- */
+let currentRot = -Math.PI / 2;   // 让 0 号扇区初始大致朝上
+let spinning = false;
+
+function pickIndexByWeight(){
+  const total = PRIZES.reduce((s, p) => s + p.weight, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < N; i++){
+    r -= PRIZES[i].weight;
+    if (r < 0) return i;
+  }
+  return N - 1;
+}
+
+function easeOutCubic(t){ return 1 - Math.pow(1 - t, 3); }
+
+function spin(){
+  if (spinning) return;
+  if (drawsLeft() <= 0){
+    toast('今日抽奖次数已用完，明天再来吧～');
+    return;
+  }
+  spinning = true;
+  go.classList.add('disabled');
+
+  const idx = pickIndexByWeight();
+
+  // 计算目标角度：让 idx 号扇区中心停在顶部指针处（顶部 = -π/2）
+  // 扇区 i 中心基准角度 = i*SEG + SEG/2，旋转后需满足 (中心 + rot) ≡ -π/2
+  const jitter = (Math.random() - 0.5) * SEG * 0.6; // 不总停正中间
+  const targetCenter = idx * SEG + SEG / 2;
+  let base = -Math.PI / 2 - targetCenter + jitter;
+  // 归一到当前角度之后，并加上若干整圈
+  const startRot = currentRot;
+  let delta = base - (startRot % TWO_PI);
+  delta = ((delta % TWO_PI) + TWO_PI) % TWO_PI;      // 0~2π
+  const finalRot = startRot + SPIN_ROUNDS * TWO_PI + delta;
+
+  const dur = SPIN_SECONDS * 1000;
+  const t0 = performance.now();
+  function frame(now){
+    const p = Math.min(1, (now - t0) / dur);
+    currentRot = startRot + (finalRot - startRot) * easeOutCubic(p);
+    drawWheel(currentRot);
+    if (p < 1){
+      requestAnimationFrame(frame);
+    } else {
+      currentRot = finalRot;
+      spinning = false;
+      go.classList.remove('disabled');
+      consumeDraw();
+      onWin(idx);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function onWin(idx){
+  const prize = PRIZES[idx];
+  const lose = /谢谢参与/.test(prize.name);
+  document.getElementById('resultEmoji').textContent = lose ? '🙈' : '🎉';
+  document.getElementById('resultTitle').textContent = lose ? '差一点点' : '恭喜中奖！';
+  document.getElementById('resultPrize').textContent = prize.name;
+  document.getElementById('resultTip').textContent = lose
+    ? '别灰心，明天还有机会哦～'
+    : '截图保留，凭此页面到前台领取奖品';
+  document.getElementById('resultMask').classList.add('show');
+  if (!lose) addHistory(prize.name);
+  renderLeft();
+}
+
+/* ---------- 次数限制（localStorage，纯前端） ---------- */
+function todayKey(){
+  const d = new Date();
+  return `lw_draws_${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+}
+function usedToday(){ return parseInt(localStorage.getItem(todayKey()) || '0', 10); }
+function drawsLeft(){ return Math.max(0, MAX_DRAWS_PER_DAY - usedToday()); }
+function consumeDraw(){ localStorage.setItem(todayKey(), usedToday() + 1); }
+function renderLeft(){
+  document.getElementById('left').textContent = drawsLeft();
+  go.classList.toggle('disabled', drawsLeft() <= 0);
+}
+
+/* ---------- 中奖记录 ---------- */
+function getHistory(){ try { return JSON.parse(localStorage.getItem('lw_history') || '[]'); } catch { return []; } }
+function addHistory(name){
+  const list = getHistory();
+  const t = new Date();
+  const time = `${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+  list.unshift({ name, time });
+  localStorage.setItem('lw_history', JSON.stringify(list.slice(0, 30)));
+  renderHistory();
+}
+function renderHistory(){
+  const ul = document.getElementById('historyList');
+  const list = getHistory();
+  if (!list.length){ ul.innerHTML = '<li class="empty">还没有记录，快来抽一次吧～</li>'; return; }
+  ul.innerHTML = list.map(it => `<li><span>${it.name}</span><span>${it.time}</span></li>`).join('');
+}
+
+/* ---------- 扫码分享 ---------- */
+function showQR(){
+  const url = location.href;
+  document.getElementById('qrUrl').textContent =
+    location.protocol === 'file:'
+      ? '当前是本地文件，二维码仅供预览；部署到服务器后扫码才能打开。'
+      : url;
+  const box = document.getElementById('qrbox');
+  box.innerHTML = '';
+  if (window.QRCode){
+    new QRCode(box, { text: url, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+  } else {
+    box.innerHTML = '<p style="color:#888;font-size:13px">二维码组件加载失败（需联网），请直接复制上面的链接。</p>';
+  }
+  document.getElementById('qrMask').classList.add('show');
+}
+
+/* ---------- 提示 ---------- */
+let toastTimer = null;
+function toast(msg){
+  let el = document.getElementById('lw-toast');
+  if (!el){
+    el = document.createElement('div');
+    el.id = 'lw-toast';
+    el.style.cssText = 'position:fixed;left:50%;bottom:60px;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;z-index:99;transition:opacity .3s;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 1800);
+}
+
+/* ---------- 事件 & 初始化 ---------- */
+const go = document.getElementById('go');
+go.addEventListener('click', spin);
+document.getElementById('shareBtn').addEventListener('click', showQR);
+document.getElementById('resetBtn').addEventListener('click', () => {
+  localStorage.removeItem(todayKey());
+  localStorage.removeItem('lw_history');
+  renderLeft(); renderHistory();
+  toast('已重置今日次数和记录');
+});
+window.addEventListener('resize', setupCanvas);
+
+setupCanvas();
+renderLeft();
+renderHistory();
+</script>
+</body>
+</html>
