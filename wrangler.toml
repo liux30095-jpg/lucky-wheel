@@ -1,0 +1,12 @@
+name = "lucky-wheel"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "."
+
+# D1 数据库绑定。database_id 在执行 `npx wrangler d1 create lucky-wheel-db` 后得到，填到下面。
+[[d1_databases]]
+binding = "DB"
+database_name = "lucky-wheel-db"
+database_id = "PUT_YOUR_DATABASE_ID_HERE"
+
+# 注意：管理员密码 ADMIN_TOKEN 不要写在这里（本仓库是公开的）。
+# 用密钥方式设置：npx wrangler pages secret put ADMIN_TOKEN --project-name lucky-wheel

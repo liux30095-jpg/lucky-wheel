@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>核销后台 · 幸运大转盘</title>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:#f3f4f8;color:#222;padding:16px;max-width:760px;margin:0 auto;}
+  h1{font-size:20px;margin:6px 0 16px;}
+  .tabs{display:flex;gap:8px;margin-bottom:14px;}
+  .tab{flex:1;text-align:center;padding:10px;border-radius:10px;background:#e7e9f0;cursor:pointer;font-weight:600;font-size:15px;}
+  .tab.active{background:#2575fc;color:#fff;}
+  .card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 4px 16px rgba(0,0,0,.06);margin-bottom:14px;}
+  input{width:100%;padding:12px;border:1px solid #d8dbe5;border-radius:10px;font-size:16px;outline:none;}
+  input:focus{border-color:#2575fc;}
+  button{appearance:none;border:none;border-radius:10px;padding:12px 16px;font-size:15px;font-weight:600;cursor:pointer;
+    background:#2575fc;color:#fff;}
+  button.ghost{background:#eef0f6;color:#333;}
+  button:active{transform:scale(.97);}
+  .row{display:flex;gap:10px;align-items:center;}
+  .row input{flex:1;}
+  .result{margin-top:14px;border-radius:12px;padding:16px;text-align:center;font-size:16px;display:none;}
+  .result.show{display:block;}
+  .result.ok{background:#e7f8ec;color:#137a3a;}
+  .result.warn{background:#fff4e0;color:#a86600;}
+  .result.bad{background:#fdeaea;color:#c0392b;}
+  .result .big{font-size:22px;font-weight:800;margin:6px 0;}
+  .hint{color:#888;font-size:12px;margin-top:8px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:8px 6px;border-bottom:1px solid #eee;text-align:left;white-space:nowrap;}
+  th{color:#888;font-weight:600;}
+  .stat{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px;}
+  .stat .box{flex:1;min-width:130px;background:#f7f8fc;border-radius:10px;padding:10px 12px;}
+  .stat .box .n{font-size:22px;font-weight:800;color:#2575fc;}
+  .stat .box .l{font-size:12px;color:#888;}
+  .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;}
+  .tag.used{background:#eee;color:#999;}
+  .tag.unused{background:#e7f8ec;color:#137a3a;}
+  .scroll{overflow:auto;max-height:60vh;}
+  #loginMask{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:24px;}
+  #loginMask .card{width:100%;max-width:320px;text-align:center;}
+  .hide{display:none !important;}
+</style>
+</head>
+<body>
+  <h1>🍧 核销后台</h1>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="redeem">核销</div>
+    <div class="tab" data-tab="board">看板</div>
+  </div>
+
+  <!-- 核销 -->
+  <section id="redeem">
+    <div class="card">
+      <div class="row">
+        <input id="rInput" placeholder="输入核销码 或 手机号" autocomplete="off">
+        <button id="rBtn">查询核销</button>
+      </div>
+      <div class="hint">输入顾客的 6 位核销码（或其手机号），确认无误后核销，核销后该券失效。</div>
+      <div class="result" id="rResult"></div>
+    </div>
+  </section>
+
+  <!-- 看板 -->
+  <section id="board" class="hide">
+    <div class="card">
+      <div class="stat" id="stat"></div>
+      <div style="margin:8px 0;"><button class="ghost" id="refreshBtn">刷新</button>
+        <button class="ghost" id="csvBtn">导出中奖名单 CSV</button></div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>时间</th><th>奖品</th><th>核销码</th><th>手机号</th><th>状态</th></tr></thead>
+          <tbody id="winRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 登录 -->
+  <div id="loginMask">
+    <div class="card">
+      <h1 style="margin:0 0 12px;">请输入后台密码</h1>
+      <input id="pwd" type="password" placeholder="管理员密码">
+      <div class="hint" id="loginErr" style="color:#c0392b;min-height:16px;"></div>
+      <button style="width:100%;margin-top:8px;" id="loginBtn">进入</button>
+    </div>
+  </div>
+
+<script>
+const $ = s => document.querySelector(s);
+let TOKEN = sessionStorage.getItem('lw_admin') || '';
+
+function headers(){ return { 'content-type':'application/json', 'x-admin-token': TOKEN }; }
+
+/* ---- 登录 ---- */
+async function tryLogin(token){
+  const r = await fetch('/api/admin/list', { headers: { 'x-admin-token': token } });
+  return r.ok;
+}
+$('#loginBtn').addEventListener('click', async ()=>{
+  const v = $('#pwd').value.trim();
+  if(!v){ $('#loginErr').textContent='请输入密码'; return; }
+  if(await tryLogin(v)){ TOKEN=v; sessionStorage.setItem('lw_admin', v); $('#loginMask').classList.add('hide'); loadBoard(); }
+  else $('#loginErr').textContent='密码错误';
+});
+$('#pwd').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#loginBtn').click(); });
+
+/* ---- Tab 切换 ---- */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  const tab=t.dataset.tab;
+  $('#redeem').classList.toggle('hide', tab!=='redeem');
+  $('#board').classList.toggle('hide', tab!=='board');
+  if(tab==='board') loadBoard();
+}));
+
+/* ---- 核销 ---- */
+$('#rBtn').addEventListener('click', doRedeem);
+$('#rInput').addEventListener('keydown', e=>{ if(e.key==='Enter') doRedeem(); });
+async function doRedeem(){
+  const v=$('#rInput').value.trim(); if(!v) return;
+  const body = /^1\d{10}$/.test(v) ? { phone:v } : { code:v };
+  const box=$('#rResult'); box.className='result';
+  try{
+    const r=await fetch('/api/admin/redeem',{method:'POST',headers:headers(),body:JSON.stringify(body)});
+    if(r.status===401){ relogin(); return; }
+    const d=await r.json();
+    if(!d.found){ show(box,'bad','❌ 查无此记录','请确认核销码/手机号是否正确'); return; }
+    if(d.isLose){ show(box,'warn','🙈 该号码是「谢谢参与」', d.prizeName); return; }
+    if(d.redeemed){ show(box,'ok','✅ 核销成功', d.prizeName + '　手机:'+d.phone); $('#rInput').value=''; return; }
+    if(d.alreadyUsed){ show(box,'warn','⚠️ 该券已核销过', d.prizeName + (d.usedAt?'　'+fmt(d.usedAt):'')); return; }
+  }catch(e){ show(box,'bad','网络异常','请重试'); }
+}
+function show(box,cls,big,sub){ box.className='result show '+cls; box.innerHTML=`<div class="big">${big}</div><div>${sub||''}</div>`; }
+
+/* ---- 看板 ---- */
+let lastWinners=[];
+async function loadBoard(){
+  try{
+    const r=await fetch('/api/admin/list',{headers:headers()});
+    if(r.status===401){ relogin(); return; }
+    const d=await r.json();
+    const stockMap={}; (d.stock||[]).forEach(s=>stockMap[s.name]=s.stock);
+    const boxes=[`<div class="box"><div class="n">${d.total}</div><div class="l">总参与人数</div></div>`];
+    (d.byPrize||[]).forEach(p=>{
+      const st = (stockMap[p.prize_name]===null||stockMap[p.prize_name]===undefined)?'不限':('余'+stockMap[p.prize_name]);
+      boxes.push(`<div class="box"><div class="n">${p.cnt}</div><div class="l">${p.prize_name}（已核${p.used||0} · ${st}）</div></div>`);
+    });
+    $('#stat').innerHTML=boxes.join('');
+    lastWinners=d.winners||[];
+    $('#winRows').innerHTML = lastWinners.map(w=>`<tr>
+      <td>${fmt(w.created_at)}</td><td>${w.prize_name}</td><td>${w.code||''}</td><td>${w.phone}</td>
+      <td><span class="tag ${w.status==='used'?'used':'unused'}">${w.status==='used'?'已核销':'未核销'}</span></td></tr>`).join('')
+      || '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">暂无中奖记录</td></tr>';
+  }catch(e){ $('#stat').innerHTML='<div class="box"><div class="l">加载失败，请刷新</div></div>'; }
+}
+$('#refreshBtn').addEventListener('click', loadBoard);
+$('#csvBtn').addEventListener('click', ()=>{
+  if(!lastWinners.length){ alert('暂无数据'); return; }
+  const head='时间,奖品,核销码,手机号,状态\n';
+  const rows=lastWinners.map(w=>[fmt(w.created_at),w.prize_name,w.code||'',w.phone,w.status==='used'?'已核销':'未核销'].join(',')).join('\n');
+  const blob=new Blob(['﻿'+head+rows],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='中奖名单.csv'; a.click();
+});
+
+function fmt(iso){ if(!iso) return ''; const d=new Date(iso); const p=n=>String(n).padStart(2,'0');
+  return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function relogin(){ sessionStorage.removeItem('lw_admin'); TOKEN=''; $('#loginMask').classList.remove('hide'); $('#loginErr').textContent='登录已失效，请重新输入'; }
+
+/* ---- 启动 ---- */
+(async ()=>{ if(TOKEN && await tryLogin(TOKEN)){ $('#loginMask').classList.add('hide'); loadBoard(); } })();
+</script>
+</body>
+</html>
