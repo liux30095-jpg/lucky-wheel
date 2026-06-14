@@ -27,12 +27,12 @@ CREATE TABLE IF NOT EXISTS draws (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_draws_phone ON draws(phone);  -- 一个手机号只能抽一次
 CREATE INDEX        IF NOT EXISTS idx_draws_code  ON draws(code);
 
--- 初始奖品（概率：一等奖 2% = 50人中1，二 9%，三 30%，代金券 20%，谢谢参与 39%）
+-- 初始奖品（概率：一等奖 2%，二等奖5折 30%，三等奖半价 35%，5元代金券 32%，谢谢参与 1%）
 -- 想限量「免费水果捞」：把第 1 行的 NULL 改成数字（如 30），送完自动转谢谢参与
 DELETE FROM prizes;
 INSERT INTO prizes (id, name, weight, stock, color, is_lose) VALUES
   (1, '一等奖·免费水果捞', 2,  NULL, '#ff6b6b', 0),
-  (2, '二等奖·单份5折',    9,  NULL, '#b794f6', 0),
-  (3, '三等奖·第二份半价', 30, NULL, '#6ec1ff', 0),
-  (4, '1元代金券',         20, NULL, '#ffe66d', 0),
-  (5, '谢谢参与',          39, NULL, '#dfe6e9', 1);
+  (2, '二等奖·单份5折',    30, NULL, '#b794f6', 0),
+  (3, '三等奖·第二份半价', 35, NULL, '#6ec1ff', 0),
+  (4, '5元代金券',         32, NULL, '#ffe66d', 0),
+  (5, '谢谢参与',          1,  NULL, '#dfe6e9', 1);
